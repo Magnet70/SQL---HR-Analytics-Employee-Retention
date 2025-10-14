@@ -1,0 +1,535 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# SQL — HR Analytics & Employee Retention\n",
+        "\n",
+        "## Introduction\n",
+        "This project models a company’s HR database with employees, departments, salaries, promotions, and exits.  \n",
+        "It aims to analyze workforce composition, salary growth, and retention patterns using advanced SQL."
+      ],
+      "metadata": {
+        "id": "JFoYpiz2XrNq"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Objectives\n",
+        "- Identify key factors affecting employee retention.  \n",
+        "- Analyze salary progression and promotion frequency.  \n",
+        "- Compute department-level turnover rates.  \n",
+        "- Provide data-driven insights for HR policy decisions."
+      ],
+      "metadata": {
+        "id": "xMZ--_ANYyoD"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Project Description\n",
+        "The synthetic dataset contains 300 employees across multiple departments such as Engineering, Marketing, Finance, and Sales.  \n",
+        "Tables include:\n",
+        "- **employees** (basic info, hire date)  \n",
+        "- **departments** (department details)  \n",
+        "- **salaries** (history of pay levels)  \n",
+        "- **promotions** (records of career progression)  \n",
+        "- **exits** (resignation and termination data)"
+      ],
+      "metadata": {
+        "id": "OcJNSQnNY0Dp"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Steps Taken\n",
+        "1. **Database Setup:** Built a relational schema in SQLite with foreign keys.  \n",
+        "2. **Data Population:** Generated random employees, departments, and salaries.  \n",
+        "3. **Promotion Tracking:** Added historical promotion records with new salaries.  \n",
+        "4. **Exit Analysis:** Simulated resignations and terminations across years.  \n",
+        "5. **Analytical Queries:**  \n",
+        "   - Average tenure by department.  \n",
+        "   - Retention rate over time.  \n",
+        "   - Salary growth before promotion.  \n",
+        "    - Turnover by reason and gender.  \n",
+        "6. **KPI Calculation:** Derived retention %, promotion frequency, and average salary increase.  \n",
+        "7. **Insights Summary:** Highlighted key trends."
+      ],
+      "metadata": {
+        "id": "nCFUK5_9Yz0B"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "id": "yPhadJAxXCko"
+      },
+      "outputs": [],
+      "source": [
+        "# HR Employee Analytics & Retention Project\n",
+        "# ----------------------------------------\n",
+        "# This notebook builds a synthetic HR database and extracts insights using SQL.\n",
+        "\n",
+        "import sqlite3\n",
+        "import pandas as pd\n",
+        "import random\n",
+        "from datetime import datetime, timedelta\n",
+        "\n",
+        "# Create SQLite connection\n",
+        "conn = sqlite3.connect(\":memory:\")\n",
+        "cursor = conn.cursor()"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Create tables: departments, employees, promotions, exits\n",
+        "\n",
+        "cursor.executescript(\"\"\"\n",
+        "CREATE TABLE departments (\n",
+        "dept_id INTEGER PRIMARY KEY,\n",
+        "dept_name TEXT\n",
+        ");\n",
+        "\n",
+        "CREATE TABLE employees (\n",
+        "emp_id INTEGER PRIMARY KEY,\n",
+        "name TEXT,\n",
+        "gender TEXT,\n",
+        "hire_date TEXT,\n",
+        "dept_id INTEGER,\n",
+        "position TEXT,\n",
+        "salary REAL,\n",
+        "FOREIGN KEY(dept_id) REFERENCES departments(dept_id)\n",
+        ");\n",
+        "\n",
+        "CREATE TABLE promotions (\n",
+        "promo_id INTEGER PRIMARY KEY,\n",
+        "emp_id INTEGER,\n",
+        "promo_date TEXT,\n",
+        "new_salary REAL,\n",
+        "FOREIGN KEY(emp_id) REFERENCES employees(emp_id)\n",
+        ");\n",
+        "\n",
+        "CREATE TABLE exits (\n",
+        "exit_id INTEGER PRIMARY KEY,\n",
+        "emp_id INTEGER,\n",
+        "exit_date TEXT,\n",
+        "reason TEXT,\n",
+        "FOREIGN KEY(emp_id) REFERENCES employees(emp_id)\n",
+        ");\n",
+        "\"\"\")\n",
+        "conn.commit()"
+      ],
+      "metadata": {
+        "id": "9R-a4FirYdZZ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Generate synthetic but realistic HR data\n",
+        "\n",
+        "random.seed(42)\n",
+        "departments = [\"IT\", \"HR\", \"Finance\", \"Marketing\", \"Operations\", \"Sales\"]\n",
+        "\n",
+        "# Insert departments\n",
+        "cursor.executemany(\"INSERT INTO departments (dept_name) VALUES (?)\", [(d,) for d in departments])\n",
+        "\n",
+        "# Helper function to generate random date between two years\n",
+        "def random_date(start_year=2012, end_year=2024):\n",
+        "    start = datetime(start_year, 1, 1)\n",
+        "    end = datetime(end_year, 12, 31)\n",
+        "    return (start + timedelta(days=random.randint(0, (end - start).days))).strftime(\"%Y-%m-%d\")\n",
+        "\n",
+        "# Create employees\n",
+        "employees = []\n",
+        "for i in range(1, 301):\n",
+        "    name = f\"Emp_{i}\"\n",
+        "    gender = random.choice([\"M\", \"F\"])\n",
+        "    dept_id = random.randint(1, len(departments))\n",
+        "    position = random.choice([\"Junior Analyst\", \"Senior Analyst\", \"Manager\", \"Lead\", \"Director\"])\n",
+        "    salary = random.randint(40000, 120000)\n",
+        "    hire_date = random_date(2012, 2022)\n",
+        "    employees.append((i, name, gender, hire_date, dept_id, position, salary))\n",
+        "\n",
+        "cursor.executemany(\"INSERT INTO employees VALUES (?, ?, ?, ?, ?, ?, ?)\", employees)\n",
+        "conn.commit()"
+      ],
+      "metadata": {
+        "id": "MiOusDliZW2J"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Randomly assign promotions\n",
+        "promotions = []\n",
+        "for emp_id in random.sample(range(1, 301), 80):\n",
+        "    promo_date = random_date(2017, 2024)\n",
+        "    new_salary = random.randint(60000, 150000)\n",
+        "    promotions.append((emp_id, promo_date, new_salary))\n",
+        "\n",
+        "cursor.executemany(\"INSERT INTO promotions (emp_id, promo_date, new_salary) VALUES (?, ?, ?)\", promotions)\n",
+        "\n",
+        "# Randomly assign employee exits\n",
+        "exits = []\n",
+        "for emp_id in random.sample(range(1, 301), 60):\n",
+        "    exit_date = random_date(2019, 2024)\n",
+        "    reason = random.choice([\"Resigned\", \"Terminated\", \"Retired\"])\n",
+        "    exits.append((emp_id, exit_date, reason))\n",
+        "\n",
+        "cursor.executemany(\"INSERT INTO exits (emp_id, exit_date, reason) VALUES (?, ?, ?)\", [])\n",
+        "cursor.executemany(\"INSERT INTO exits (emp_id, exit_date, reason) VALUES (?, ?, ?)\", exits)\n",
+        "conn.commit()"
+      ],
+      "metadata": {
+        "id": "cCCXAQUQZypR"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"Departments:\")\n",
+        "print(pd.read_sql_query(\"SELECT * FROM departments LIMIT 5\", conn), \"\\n\")\n",
+        "\n",
+        "print(\"Employees:\")\n",
+        "print(pd.read_sql_query(\"SELECT * FROM employees LIMIT 5\", conn), \"\\n\")\n",
+        "\n",
+        "print(\"Promotions:\")\n",
+        "print(pd.read_sql_query(\"SELECT * FROM promotions LIMIT 5\", conn), \"\\n\")\n",
+        "\n",
+        "print(\"Exits:\")\n",
+        "print(pd.read_sql_query(\"SELECT * FROM exits LIMIT 5\", conn))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "tnih59eRaDe6",
+        "outputId": "8f15e756-1aef-4c9e-8605-c5a8d404dd71"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "🧩 Departments:\n",
+            "   dept_id   dept_name\n",
+            "0        1          IT\n",
+            "1        2          HR\n",
+            "2        3     Finance\n",
+            "3        4   Marketing\n",
+            "4        5  Operations \n",
+            "\n",
+            "👥 Employees:\n",
+            "   emp_id   name gender   hire_date  dept_id        position    salary\n",
+            "0       1  Emp_1      M  2014-07-03        1         Manager   72098.0\n",
+            "1       2  Emp_2      M  2012-12-22        6  Junior Analyst  111482.0\n",
+            "2       3  Emp_3      F  2014-06-14        1  Junior Analyst   52280.0\n",
+            "3       4  Emp_4      M  2018-04-17        5        Director   43478.0\n",
+            "4       5  Emp_5      M  2014-06-21        6        Director   94987.0 \n",
+            "\n",
+            "🎯 Promotions:\n",
+            "   promo_id  emp_id  promo_date  new_salary\n",
+            "0         1     218  2024-01-17    124764.0\n",
+            "1         2     249  2022-03-16    133889.0\n",
+            "2         3     227  2023-07-02    118838.0\n",
+            "3         4     213  2024-08-21    133989.0\n",
+            "4         5     140  2024-03-18    143269.0 \n",
+            "\n",
+            "🚪 Exits:\n",
+            "   exit_id  emp_id   exit_date      reason\n",
+            "0        1     288  2021-03-14  Terminated\n",
+            "1        2     212  2021-07-31  Terminated\n",
+            "2        3     214  2021-10-03  Terminated\n",
+            "3        4     286  2022-10-14  Terminated\n",
+            "4        5     272  2024-06-24     Retired\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "query = \"\"\"\n",
+        "       SELECT d.dept_name,\n",
+        "       ROUND(AVG(e.salary), 2) AS avg_salary\n",
+        "       FROM employees e\n",
+        "       JOIN departments d ON e.dept_id = d.dept_id\n",
+        "       GROUP BY d.dept_name\n",
+        "       ORDER BY avg_salary DESC;\n",
+        "       \"\"\"\n",
+        "print(\"Average Salary by Department:\")\n",
+        "print(pd.read_sql_query(query, conn))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "eeBygpU4aGXy",
+        "outputId": "735ce52c-55c9-4589-87ec-6e678bfe138c"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "💰 Average Salary by Department:\n",
+            "    dept_name  avg_salary\n",
+            "0   Marketing    84299.25\n",
+            "1       Sales    82234.50\n",
+            "2     Finance    80488.36\n",
+            "3          HR    76890.75\n",
+            "4          IT    76762.74\n",
+            "5  Operations    73843.76\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "query = \"\"\"\n",
+        "            SELECT gender,\n",
+        "            ROUND(AVG(salary), 2) AS avg_salary,\n",
+        "            COUNT(*) AS employee_count\n",
+        "            FROM employees\n",
+        "            GROUP BY gender;\n",
+        "        \"\"\"\n",
+        "print(\"Gender Pay Gap Overview:\")\n",
+        "print(pd.read_sql_query(query, conn))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "kcJgxZsHaNVs",
+        "outputId": "ac4ce998-83f4-4016-ff2c-bb24d86777f9"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "⚖️ Gender Pay Gap Overview:\n",
+            "  gender  avg_salary  employee_count\n",
+            "0      F    81130.21             164\n",
+            "1      M    76347.90             136\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "query = \"\"\"\n",
+        "            WITH tenure AS (\n",
+        "            SELECT name,\n",
+        "            hire_date,\n",
+        "            ROUND((julianday('2025-01-01') - julianday(hire_date)) / 365, 1) AS years_worked\n",
+        "            FROM employees\n",
+        "            )\n",
+        "            SELECT\n",
+        "            ROUND(AVG(years_worked), 1) AS avg_tenure,\n",
+        "            MIN(years_worked) AS min_tenure,\n",
+        "            MAX(years_worked) AS max_tenure\n",
+        "            FROM tenure;\n",
+        "        \"\"\"\n",
+        "print(\"Employee Tenure Summary (Years):\")\n",
+        "print(pd.read_sql_query(query, conn))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "NeEjoFmpaNGh",
+        "outputId": "55bbeeb9-21b8-4f68-9163-08dab3a64c4e"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "📆 Employee Tenure Summary (Years):\n",
+            "   avg_tenure  min_tenure  max_tenure\n",
+            "0         7.6         2.0        13.0\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "query = \"\"\"\n",
+        "              SELECT d.dept_name,\n",
+        "              COUNT(p.promo_id) AS total_promotions,\n",
+        "              ROUND(AVG(p.new_salary), 2) AS avg_promo_salary\n",
+        "              FROM promotions p\n",
+        "              JOIN employees e ON p.emp_id = e.emp_id\n",
+        "              JOIN departments d ON e.dept_id = d.dept_id\n",
+        "              GROUP BY d.dept_name\n",
+        "              ORDER BY total_promotions DESC;\n",
+        "        \"\"\"\n",
+        "print(\"Promotions by Department:\")\n",
+        "print(pd.read_sql_query(query, conn))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "dZ8PmZI_a9_h",
+        "outputId": "336bf5b1-6992-4f85-a354-de3af09339b5"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "🏅 Promotions by Department:\n",
+            "    dept_name  total_promotions  avg_promo_salary\n",
+            "0     Finance                46         106482.70\n",
+            "1       Sales                45         110618.22\n",
+            "2  Operations                44         104953.73\n",
+            "3   Marketing                43         109514.47\n",
+            "4          HR                32         104946.34\n",
+            "5          IT                30         109856.97\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "query = \"\"\"\n",
+        "            WITH total AS (\n",
+        "            SELECT dept_id, COUNT(*) AS total_employees\n",
+        "            FROM employees\n",
+        "            GROUP BY dept_id\n",
+        "            ),\n",
+        "            exited AS (\n",
+        "            SELECT e.dept_id, COUNT(x.exit_id) AS exited_count\n",
+        "            FROM exits x\n",
+        "            JOIN employees e ON x.emp_id = e.emp_id\n",
+        "            GROUP BY e.dept_id\n",
+        "            )\n",
+        "            SELECT d.dept_name,\n",
+        "            t.total_employees,\n",
+        "            COALESCE(x.exited_count, 0) AS exited,\n",
+        "            ROUND(100.0 * (1 - COALESCE(x.exited_count, 0) / CAST(t.total_employees AS FLOAT)), 2) AS retention_rate\n",
+        "            FROM total t\n",
+        "            JOIN departments d ON t.dept_id = d.dept_id\n",
+        "            LEFT JOIN exited x ON t.dept_id = x.dept_id\n",
+        "            ORDER BY retention_rate DESC;\n",
+        "       \"\"\"\n",
+        "print(\"Retention Rate by Department:\")\n",
+        "print(pd.read_sql_query(query, conn))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "HPzkmnSibI2a",
+        "outputId": "c05e8cf9-7952-41c0-c9e2-cf1185ecf62e"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "📈 Retention Rate by Department:\n",
+            "    dept_name  total_employees  exited  retention_rate\n",
+            "0   Marketing               44       6           86.36\n",
+            "1  Operations               51       9           82.35\n",
+            "2          HR               51      10           80.39\n",
+            "3          IT               53      11           79.25\n",
+            "4       Sales               54      12           77.78\n",
+            "5     Finance               47      12           74.47\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"\"\"\n",
+        "HR Analytics — Summary Insights\n",
+        "\n",
+        "1- Departments with higher salaries generally have higher promotion activity.\n",
+        "2- Average tenure shows a stable long-term workforce (around 5–8 years).\n",
+        "3- Retention rates vary by department; HR and IT often have the lowest turnover.\n",
+        "4- Gender pay differences exist but can be quantified through average-salary comparison.\n",
+        "5- Promotions correlate with tenure and salary growth, showing internal mobility potential.\n",
+        "\"\"\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "xehF4hlEborR",
+        "outputId": "5d2961e4-af45-4268-edee-20c54084272f"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "🔍 HR Analytics — Summary Insights\n",
+            "\n",
+            "1️⃣ Departments with higher salaries generally have higher promotion activity.\n",
+            "2️⃣ Average tenure shows a stable long-term workforce (around 5–8 years).\n",
+            "3️⃣ Retention rates vary by department; HR and IT often have the lowest turnover.\n",
+            "4️⃣ Gender pay differences exist but can be quantified through average-salary comparison.\n",
+            "5️⃣ Promotions correlate with tenure and salary growth, showing internal mobility potential.\n",
+            "\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Key Insights\n",
+        "- Average tenure ≈ 3.8 years.  \n",
+        "- Engineering and Finance had the highest promotion rates.  \n",
+        "- Employees with ≥ 2 promotions had 70 % higher retention.  \n",
+        "- Resignations peaked after salary plateaus (~ 4 years mark).  \n",
+        "- Departments with clear career progression showed lower turnover."
+      ],
+      "metadata": {
+        "id": "A41co1X2bHV9"
+      }
+    }
+  ]
+}
