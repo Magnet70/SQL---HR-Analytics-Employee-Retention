@@ -1,4 +1,4 @@
-# SQL Project 2 — HR Analytics & Employee Retention
+# SQL — HR Analytics & Employee Retention
 
 ## Introduction
 This project models a company’s HR database with employees, departments, salaries, promotions, and exits.  
